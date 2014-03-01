@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 github3.pulls
 =============
@@ -134,6 +135,8 @@ class PullRequest(GitHubCore):
         self.id = pull.get('id')
         #: The URL of the associated issue
         self.issue_url = pull.get('issue_url')
+        #: Statuses URL
+        self.statuses_url = pull.get('statuses_url')
 
         # These are the links provided by the dictionary in the json called
         # '_links'. It's structure is horrific, so to make this look a lot
@@ -165,7 +168,7 @@ class PullRequest(GitHubCore):
         self.mergeable = pull.get('mergeable', False)
         #: Whether it would be a clean merge or not
         self.mergeable_state = pull.get('mergeable_state', '')
-        #: SHA of the merge commit
+        #: SHA of the merge commit. DEPRECATED
         self.merge_commit_sha = pull.get('merge_commit_sha', '')
         user = pull.get('merged_by')
         #: :class:`User <github3.users.User>` who merged this pull
@@ -361,10 +364,18 @@ class ReviewComment(BaseComment):
 
         #: Path to the file
         self.path = comment.get('path')
+
         #: Position within the commit
         self.position = comment.get('position') or 0
+
         #: SHA of the commit the comment is on
         self.commit_id = comment.get('commit_id')
+
+        #: The diff hunk
+        self.diff_hunk = comment.get('diff_hunk')
+
+        #: Original commit SHA
+        self.original_commit_id = comment.get('original_commit_id')
 
     def __repr__(self):
         return '<Review Comment [{0}]>'.format(self.user.login)

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import json
 
 from github3.decorators import requires_auth
@@ -107,7 +108,7 @@ class Release(GitHubCore):
         :param str etag: (optional), last ETag header sent
         :returns: generator of :class:`Asset <Asset>` objects
         """
-        url = self._build_url('assets', base_url=self.__api)
+        url = self._build_url('assets', base_url=self._api)
         return self._iter(number, url, Asset, etag=etag)
 
     @requires_auth
@@ -125,7 +126,8 @@ class Release(GitHubCore):
         headers = Release.CUSTOM_HEADERS.copy()
         headers.update({'Content-Type': content_type})
         url = self.upload_urlt.expand({'name': name})
-        r = self._post(url, data=asset, headers=headers)
+        r = self._post(url, data=asset, json=False, headers=headers,
+                       verify=False)
         if r.status_code in (201, 202):
             return Asset(r.json(), self)
         raise GitHubError(r)
@@ -134,6 +136,7 @@ class Release(GitHubCore):
 class Asset(GitHubCore):
     def __init__(self, asset, session=None):
         super(Asset, self).__init__(asset, session)
+        self._api = asset.get('url')
         #: Content-Type provided when the asset was created
         self.content_type = asset.get('content_type')
         #: Date the asset was created

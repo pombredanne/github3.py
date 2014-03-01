@@ -1,8 +1,3 @@
-import sys
-if sys.version_info < (3, 0):
-    import unittest2 as unittest
-else:
-    import unittest
 import github3
 from github3 import gists
 from tests.utils import (BaseCase, load)
@@ -35,7 +30,8 @@ class TestGist(BaseCase):
         assert self.gist.create_comment(None) is None
         assert self.gist.create_comment('') is None
         self.not_called()
-        assert isinstance(self.gist.create_comment('bar'), gists.comment.GistComment)
+        assert isinstance(self.gist.create_comment('bar'),
+                          gists.comment.GistComment)
         self.mock_assertions()
 
     def test_delete(self):
@@ -98,7 +94,7 @@ class TestGist(BaseCase):
     def test_iter_comments(self):
         self.response('gist_comment', _iter=True)
         self.get(self.api + '/comments')
-        self.conf = {'params': None}
+        self.conf = {'params': {'per_page': 100}}
 
         c = next(self.gist.iter_comments())
 
@@ -108,7 +104,7 @@ class TestGist(BaseCase):
     def test_iter_commits(self):
         self.response('gist_history', _iter=True)
         self.get(self.api + '/commits')
-        self.conf = {'params': None}
+        self.conf = {'params': {'per_page': 100}}
 
         h = next(self.gist.iter_commits())
         assert isinstance(h, gists.history.GistHistory)

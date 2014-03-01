@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 github3.repos.repo
 ==================
@@ -25,7 +26,7 @@ from github3.repos.comment import RepoComment
 from github3.repos.commit import RepoCommit
 from github3.repos.comparison import Comparison
 from github3.repos.contents import Contents, validate_commmitter
-from github3.repos.download import Download
+from github3.repos.deployment import Deployment
 from github3.repos.hook import Hook
 from github3.repos.status import Status
 from github3.repos.stats import ContributorStats
@@ -65,8 +66,11 @@ class Repository(GitHubCore):
         self.description = repo.get('description', '')
 
         # The number of forks
-        #: The number of forks made of this repository.
+        #: The number of forks made of this repository. DEPRECATED
         self.forks = repo.get('forks', 0)
+
+        #: The number of forks of this repository.
+        self.fork_count = repo.get('fork_count')
 
         #: Is this repository a fork?
         self.fork = repo.get('fork')
@@ -102,9 +106,11 @@ class Repository(GitHubCore):
         #: Name of the repository.
         self.name = repo.get('name', '')
 
-        # Number of open issues
-        #: Number of open issues on the repository.
+        #: Number of open issues on the repository. DEPRECATED
         self.open_issues = repo.get('open_issues', 0)
+
+        #: Number of open issues on the repository
+        self.open_issues_count = repo.get('open_issues_count')
 
         # Repository owner's name
         #: :class:`User <github3.users.User>` object representing the
@@ -118,6 +124,10 @@ class Repository(GitHubCore):
         self.pushed_at = self._strptime(repo.get('pushed_at'))
         #: Size of the repository.
         self.size = repo.get('size', 0)
+
+        # The number of stargazers
+        #: Number of users who starred the repository
+        self.stargazers = repo.get('stargazers_count', 0)
 
         # SSH url e.g. git@github.com/sigmavirus24/github3.py
         #: URL to clone the repository via SSH.
@@ -509,6 +519,32 @@ class Repository(GitHubCore):
         return Commit(json, self) if json else None
 
     @requires_auth
+    def create_deployment(self, ref, force=False, payload='',
+                          auto_merge=False, description=''):
+        """Create a deployment.
+
+        :param str ref: (required), The ref to deploy. This can be a branch,
+            tag, or sha.
+        :param bool force: Optional parameter to bypass any ahead/behind
+            checks or commit status checks. Default: False
+        :param str payload: Optional JSON payload with extra information about
+            the deployment. Default: ""
+        :param bool auto_merge: Optional parameter to merge the default branch
+            into the requested deployment branch if necessary. Default: False
+        :param str description: Optional short description. Default: ""
+        :returns: :class:`Deployment <github3.repos.deployment.Deployment>`
+        """
+        json = None
+        if ref:
+            url = self._build_url('deployments', base_url=self._api)
+            data = {'ref': ref, 'force': force, 'payload': payload,
+                    'auto_merge': auto_merge, 'description': description}
+            headers = Deployment.CUSTOM_HEADERS
+            json = self._json(self._post(url, data=data, headers=headers),
+                              201)
+        return Deployment(json, self) if json else None
+
+    @requires_auth
     def create_file(self, path, message, content, branch=None,
                     committer=None, author=None):
         """Create a file in this repository.
@@ -876,23 +912,14 @@ class Repository(GitHubCore):
         url = self._build_url('keys', str(key_id), base_url=self._api)
         return self._boolean(self._delete(url), 204, 404)
 
-    def download(self, id_num):
-        """Get a single download object by its id.
+    @requires_auth
+    def delete_subscription(self):
+        """Delete the user's subscription to this repository.
 
-        .. warning::
-
-            On 2012-03-11, GitHub will be deprecating the Downloads API. This
-            method will no longer work.
-
-        :param int id_num: (required), id of the download
-        :returns: :class:`Download <Download>` if successful, else None
+        :returns: bool
         """
-        json = None
-        if int(id_num) > 0:
-            url = self._build_url('downloads', str(id_num),
-                                  base_url=self._api)
-            json = self._json(self._get(url), 200)
-        return Download(json, self) if json else None
+        url = self._build_url('subscription', base_url=self._api)
+        return self._boolean(self._delete(url), 204, 404)
 
     @requires_auth
     def edit(self,
@@ -1077,6 +1104,18 @@ class Repository(GitHubCore):
         url = self._build_url('stats', 'code_frequency', base_url=self._api)
         return self._iter(int(number), url, list, etag=etag)
 
+    def iter_collaborators(self, number=-1, etag=None):
+        """Iterate over the collaborators of this repository.
+
+        :param int number: (optional), number of collaborators to return.
+            Default: -1 returns all comments
+        :param str etag: (optional), ETag from a previous request to the same
+            endpoint
+        :returns: generator of :class:`User <github3.users.User>`\ s
+        """
+        url = self._build_url('collaborators', base_url=self._api)
+        return self._iter(int(number), url, User, etag=etag)
+
     def iter_comments(self, number=-1, etag=None):
         """Iterate over comments on all commits in the repository.
 
@@ -1198,22 +1237,20 @@ class Repository(GitHubCore):
         url = self._build_url('stats', 'contributors', base_url=self._api)
         return self._iter(int(number), url, ContributorStats, etag=etag)
 
-    def iter_downloads(self, number=-1, etag=None):
-        """Iterate over available downloads for this repository.
+    def iter_deployments(self, number=-1, etag=None):
+        """Iterate over deployments for this repository.
 
-        .. warning::
-
-            On 2012-03-11, GitHub will be deprecating the Downloads API. This
-            method will no longer work.
-
-        :param int number: (optional), number of downloads to return. Default:
-            -1 returns all available downloads
-        :param str etag: (optional), ETag from a previous request to the same
-            endpoint
-        :returns: generator of :class:`Download <Download>`\ s
+        :param int number: (optional), number of deployments to return.
+            Default: -1, returns all available deployments
+        :param str etag: (optional), ETag from a previous request for all
+            deployments
+        :returns: generator of
+            :class:`Deployment <github3.repos.deployment.Deployment>`\ s
         """
-        url = self._build_url('downloads', base_url=self._api)
-        return self._iter(int(number), url, Download, etag=etag)
+        url = self._build_url('deployments', base_url=self._api)
+        i = self._iter(int(number), url, Deployment, etag=etag)
+        i.headers.update(Deployment.CUSTOM_HEADERS)
+        return i
 
     def iter_events(self, number=-1, etag=None):
         """Iterate over events on this repository.
@@ -1275,7 +1312,8 @@ class Repository(GitHubCore):
         :param str assignee: (optional), 'none', '*', or login name
         :param str mentioned: (optional), user's login name
         :param str labels: (optional), comma-separated list of labels, e.g.
-            'bug,ui,@high' :param sort: accepted values:
+            'bug,ui,@high'
+        :param sort: (optional), accepted values:
             ('created', 'updated', 'comments', 'created')
         :param str direction: (optional), accepted values: ('asc', 'desc')
         :param since: (optional), Only issues after this date will
@@ -1734,7 +1772,8 @@ class Repository(GitHubCore):
             content = b64encode(content).decode('utf-8')
             data = {'message': message, 'content': content, 'sha': sha,
                     'committer': validate_commmitter(committer),
-                    'author': validate_commmitter(author)}
+                    'author': validate_commmitter(author),
+                    'branch': branch}
             self._remove_none(data)
             json = self._json(self._put(url, data=dumps(data)), 200)
             if 'content' in json and 'commit' in json:
